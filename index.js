@@ -33,6 +33,29 @@ let userSchema = new mongoose.Schema({
 ///Database User Model
 let User = mongoose.model('User', userSchema);
 
+//Database User Schema
+let exerciseSchema = new mongoose.Schema({
+  user_id: {
+    type: String,
+    required: true
+  },
+  date: {
+    type: String,
+    required: true
+  },
+  duration: {
+    type: Number,
+    required: true
+  },
+  description: {
+    type: String,
+    required: true
+  }
+})
+
+///Database User Model
+let Exercise = mongoose.model('Exercise', exerciseSchema);
+
 //Create User
 const createAndSaveUser = async (username) => {
   return new Promise((resolve, reject) => {
@@ -46,12 +69,38 @@ const createAndSaveUser = async (username) => {
   })
 }
 
+//Find one user by ID
+const findUserById = (userId) => {
+  return new Promise((resolve, reject) => {
+    User.findById(userId, (err, user) => {
+      if(err) reject(err)
+      if(user) resolve(user)
+    })
+  })
+}
+
 //Get list of Users
 const getUsers = async () => {
   return new Promise((resolve, reject) => {
     User.find({},(err, data) => {
       if(err) reject(err)
       if(data) resolve(data)
+    })
+  })
+}
+
+//Create Execise
+const createAndSaveExercise = async (user_id, date, duration, description) => {
+  return new Promise((resolve, reject) => {
+    const exercise = new Exercise({
+      user_id: user_id,
+      date: date,
+      duration:duration,
+      description:description
+    })
+    exercise.save((err, doc) => {
+      if (err) reject(err)
+      if (doc) resolve(doc)
     })
   })
 }
@@ -75,6 +124,62 @@ app.route('/api/users').get(async (req, res) => {
     const users = await getUsers()
     if(users)
       res.json(users) //The GET request to /api/users returns an array.
+  } catch(err) {
+    console.log(err)
+  }
+})
+
+//You can POST to /api/users/:_id/exercises with form data description, duration, and optionally date. If no date is supplied, the current date will be used.
+app.route('/api/users/:_id/exercises').post(async (req, res) => {
+  try {        
+    //Find user
+    let user = await findUserById(req.params._id)
+    if(!user)
+      throw new Error('user not found!')
+
+    const user_id = req.params._id
+    const duration = req.body.duration
+    const description = req.body.description
+    
+    //Date
+    let date
+    if(req.body.date)
+      date =  new Date(req.body.date)
+    else
+      date = new Date()
+    const date_string = date.toDateString()
+
+    //Create exercise
+    const exercise = await createAndSaveExercise(user_id, date_string, duration, description)
+    if(!exercise)
+      throw new Error('exercise not created!')
+
+    //The response returned from POST /api/users/:_id/exercises will be the user object with the exercise fields added.
+    const user_data = user.toObject()
+    user_data.date = exercise.date
+    user_data.duration = exercise.duration
+    user_data.description = exercise.description
+    delete user_data.__v
+    res.json(user_data)
+    
+  } catch(err) {
+    console.log(err)
+  }
+})
+
+//You can make a GET request to /api/users/:_id/logs to retrieve a full exercise log of any user.
+//A request to a user's log GET /api/users/:_id/logs returns a user object with a count property representing the number of exercises that belong to that user.
+//A GET request to /api/users/:_id/logs will return the user object with a log array of all the exercises added.
+//Each item in the log array that is returned from GET /api/users/:_id/logs is an object that should have a description, duration, and date properties.
+//The description property of any object in the log array that is returned from GET /api/users/:_id/logs should be a string.
+//Failed:The duration property of any object in the log array that is returned from GET /api/users/:_id/logs should be a number.
+//The date property of any object in the log array that is returned from GET /api/users/:_id/logs should be a string. Use the dateString format of the Date API.
+//You can add from, to and limit parameters to a GET /api/users/:_id/logs request to retrieve part of the log of any user. from and to are dates in yyyy-mm-dd format. limit is an integer of how many logs to send back.
+
+app.route('/api/users/:_id/logs').get(async (req, res) => {
+  try {    
+    //req.params._id
+    
   } catch(err) {
     console.log(err)
   }
