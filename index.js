@@ -72,7 +72,7 @@ const createAndSaveUser = async (username) => {
 //Find one user by ID
 const findUserById = (userId) => {
   return new Promise((resolve, reject) => {
-    User.findById(userId, (err, user) => {
+    User.findById(userId).lean().exec((err, user) => {
       if(err) reject(err)
       if(user) resolve(user)
     })
@@ -101,6 +101,16 @@ const createAndSaveExercise = async (user_id, date, duration, description) => {
     exercise.save((err, doc) => {
       if (err) reject(err)
       if (doc) resolve(doc)
+    })
+  })
+}
+
+//Find Exercises
+const findExercisesByUserId = async (user_id) => {
+  return new Promise((resolve, reject) => {
+    Exercise.find({user_id:user_id}).lean().exec((err, data) => {
+      if(err) reject(err)
+      if(data) resolve(data)
     })
   })
 }
@@ -155,30 +165,42 @@ app.route('/api/users/:_id/exercises').post(async (req, res) => {
       throw new Error('exercise not created!')
 
     //The response returned from POST /api/users/:_id/exercises will be the user object with the exercise fields added.
-    const user_data = user.toObject()
-    user_data.date = exercise.date
-    user_data.duration = exercise.duration
-    user_data.description = exercise.description
-    delete user_data.__v
-    res.json(user_data)
+    user.date = exercise.date
+    user.duration = exercise.duration
+    user.description = exercise.description
+    delete user.__v
+    res.json(user)
     
   } catch(err) {
     console.log(err)
   }
 })
 
-//You can make a GET request to /api/users/:_id/logs to retrieve a full exercise log of any user.
-//A request to a user's log GET /api/users/:_id/logs returns a user object with a count property representing the number of exercises that belong to that user.
-//A GET request to /api/users/:_id/logs will return the user object with a log array of all the exercises added.
-//Each item in the log array that is returned from GET /api/users/:_id/logs is an object that should have a description, duration, and date properties.
-//The description property of any object in the log array that is returned from GET /api/users/:_id/logs should be a string.
-//Failed:The duration property of any object in the log array that is returned from GET /api/users/:_id/logs should be a number.
-//The date property of any object in the log array that is returned from GET /api/users/:_id/logs should be a string. Use the dateString format of the Date API.
-//You can add from, to and limit parameters to a GET /api/users/:_id/logs request to retrieve part of the log of any user. from and to are dates in yyyy-mm-dd format. limit is an integer of how many logs to send back.
+//https://exercisetracker.leonardomotta.repl.co/api/users/63a0dd3fb8837f023889d3ad/logs
 
+//You can make a GET request to /api/users/:_id/logs to retrieve a full exercise log of any user.
+//You can add from, to and limit parameters to a GET /api/users/:_id/logs request to retrieve part of the log of any user. from and to are dates in yyyy-mm-dd format. limit is an integer of how many logs to send back.
 app.route('/api/users/:_id/logs').get(async (req, res) => {
   try {    
-    //req.params._id
+    const user = await findUserById(req.params._id)
+    if(!user)
+      throw new Error('user not found!')
+
+    const exercises = await findExercisesByUserId(user._id)
+
+    if(!exercises)
+      throw new Error('no exercises found!')
+    
+    exercises.forEach((ex) => { 
+      delete ex._id
+      delete ex.user_id
+      delete ex.__v
+    })
+    
+    user.count = exercises.length
+    user.log = exercises
+    delete user.__v
+    res.json(user)
     
   } catch(err) {
     console.log(err)
